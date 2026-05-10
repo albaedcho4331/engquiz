@@ -1,0 +1,1922 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>영작 문제 생성기</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        :root {
+            --primary: #4F7FFF;
+            --primary-light: #E8EEFF;
+            --success: #22C55E;
+            --warning: #F59E0B;
+            --bg: #F1F5F9;
+            --card: #FFFFFF;
+            --text: #1E293B;
+            --text-muted: #64748B;
+            --border: #E2E8F0;
+            --radius: 14px;
+            --shadow: 0 1px 8px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.04);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+            background: var(--bg); color: var(--text); line-height: 1.6; min-height: 100vh;
+        }
+
+        /* ── Header ── */
+        .header {
+            background: linear-gradient(135deg, #4F7FFF 0%, #7B5EA7 100%);
+            color: white; padding: 24px 20px 20px; text-align: center;
+        }
+        .header h1 { font-size: clamp(1.4rem, 5vw, 2rem); font-weight: 800; margin-bottom: 4px; }
+        .header p { opacity: 0.85; font-size: clamp(0.8rem, 3vw, 0.95rem); }
+
+        /* ── Main ── */
+        .main { max-width: 760px; margin: 0 auto; padding: 20px 14px 60px; }
+
+        /* ── Card ── */
+        .card {
+            background: var(--card); border-radius: var(--radius);
+            padding: clamp(16px, 4vw, 24px); margin-bottom: 14px; box-shadow: var(--shadow);
+        }
+        .card-title {
+            font-size: 0.95rem; font-weight: 700; color: var(--text);
+            margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+        }
+        .step-badge {
+            background: var(--primary); color: white; border-radius: 50%;
+            width: 26px; height: 26px; display: flex; align-items: center;
+            justify-content: center; font-size: 0.8rem; font-weight: 800; flex-shrink: 0;
+        }
+
+        /* ── API Key ── */
+        .api-details {
+            background: #FFFBEB; border: 1px solid #FCD34D; border-radius: 10px;
+            padding: 14px; margin-bottom: 14px;
+        }
+        .api-details summary {
+            cursor: pointer; font-weight: 600; font-size: 0.875rem;
+            color: #78350F; list-style: none; display: flex; align-items: center; gap: 8px;
+        }
+        .api-details summary::-webkit-details-marker { display: none; }
+        .api-key-row { display: flex; gap: 8px; margin-top: 10px; }
+        .api-key-row input { flex: 1; }
+        .api-note { font-size: 0.78rem; color: #92400E; margin-top: 6px; }
+
+        /* ── Grade ── */
+        .grade-group { margin-bottom: 12px; }
+        .grade-group:last-child { margin-bottom: 0; }
+        .grade-label {
+            font-size: 0.72rem; font-weight: 700; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;
+        }
+        .grade-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+        .grade-btn {
+            padding: 8px 14px; border: 2px solid var(--border); background: white;
+            border-radius: 8px; cursor: pointer; font-size: 0.875rem; font-weight: 700;
+            color: var(--text-muted); transition: all 0.15s; font-family: inherit;
+        }
+        .grade-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+        .grade-btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+        .grade-desc {
+            margin-top: 12px; padding: 10px 14px; background: var(--primary-light);
+            border-radius: 8px; border-left: 3px solid var(--primary);
+            font-size: 0.83rem; color: #1E40AF; display: none;
+        }
+        .grade-desc.visible { display: block; }
+
+        /* ── Tabs ── */
+        .tabs { display: flex; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
+        .tab-btn {
+            padding: 10px 18px; border: none; background: none; cursor: pointer;
+            font-size: 0.875rem; font-weight: 700; color: var(--text-muted);
+            border-bottom: 3px solid transparent; margin-bottom: -2px;
+            transition: all 0.15s; font-family: inherit;
+        }
+        .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* ── Form ── */
+        .form-group { margin-bottom: 14px; }
+        .form-group:last-child { margin-bottom: 0; }
+        label { display: block; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+        textarea, input[type="text"], input[type="password"], select {
+            width: 100%; padding: 10px 12px; border: 2px solid var(--border); border-radius: 8px;
+            font-size: 0.9rem; font-family: inherit; color: var(--text);
+            background: white; transition: border-color 0.15s;
+        }
+        textarea { resize: vertical; }
+        textarea:focus, input:focus, select:focus { outline: none; border-color: var(--primary); }
+
+        /* ── Upload ── */
+        .upload-area {
+            border: 2px dashed var(--border); border-radius: 10px;
+            padding: 32px 20px; text-align: center; cursor: pointer; transition: all 0.15s;
+        }
+        .upload-area:hover, .upload-area.drag-over { border-color: var(--primary); background: var(--primary-light); }
+        .upload-area input[type="file"] { display: none; }
+        .upload-icon { font-size: 2.5rem; margin-bottom: 10px; }
+        .upload-hint { color: var(--text-muted); font-size: 0.875rem; }
+        .upload-hint strong { color: var(--primary); }
+
+        /* ── Chips ── */
+        .chip-section { margin-bottom: 16px; }
+        .chip-section:last-child { margin-bottom: 0; }
+        .chip-section-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px; cursor: pointer; user-select: none;
+        }
+        .chip-section-title {
+            font-size: 0.78rem; font-weight: 700; color: var(--text-muted);
+            text-transform: uppercase; letter-spacing: 0.8px;
+        }
+        .chip-section-actions { display: flex; gap: 6px; }
+        .chip-mini-btn {
+            font-size: 0.7rem; font-weight: 700; color: var(--primary);
+            background: none; border: none; cursor: pointer; font-family: inherit;
+            padding: 0 4px; opacity: 0.7; transition: opacity 0.1s;
+        }
+        .chip-mini-btn:hover { opacity: 1; }
+        .chips-wrap { display: flex; gap: 7px; flex-wrap: wrap; }
+        .chip {
+            padding: 5px 12px; border: 1.5px solid var(--border); background: white;
+            border-radius: 20px; cursor: pointer; font-size: 0.8rem; font-weight: 600;
+            color: var(--text-muted); transition: all 0.15s; font-family: inherit;
+        }
+        .chip:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+        .chip.active {
+            background: var(--primary); border-color: var(--primary); color: white;
+        }
+        .chip.active-green {
+            background: #16A34A; border-color: #16A34A; color: white;
+        }
+        .chip.active-purple {
+            background: #7C3AED; border-color: #7C3AED; color: white;
+        }
+        .chips-collapsed { display: none !important; }
+
+        /* ── Difficulty slider ── */
+        .difficulty-wrap { margin-top: 4px; }
+        .difficulty-labels {
+            display: flex; justify-content: space-between;
+            font-size: 0.72rem; color: var(--text-muted); font-weight: 600;
+            margin-bottom: 4px;
+        }
+        input[type="range"] {
+            width: 100%; -webkit-appearance: none; appearance: none;
+            height: 6px; border-radius: 3px;
+            background: linear-gradient(to right, #4F7FFF 0%, #4F7FFF var(--fill,50%), #E2E8F0 var(--fill,50%), #E2E8F0 100%);
+            outline: none; cursor: pointer;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none; width: 20px; height: 20px;
+            border-radius: 50%; background: var(--primary);
+            box-shadow: 0 2px 6px rgba(79,127,255,0.4); cursor: pointer;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px; height: 20px; border-radius: 50%; background: var(--primary);
+            border: none; box-shadow: 0 2px 6px rgba(79,127,255,0.4); cursor: pointer;
+        }
+        .difficulty-value {
+            text-align: center; font-size: 0.82rem; font-weight: 700;
+            color: var(--primary); margin-top: 6px;
+        }
+
+        /* ── Problem type ── */
+        .type-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .type-btn {
+            flex: 1; min-width: 120px; padding: 10px 12px; border: 2px solid var(--border);
+            background: white; border-radius: 10px; cursor: pointer; font-family: inherit;
+            font-size: 0.82rem; font-weight: 700; color: var(--text-muted);
+            text-align: center; transition: all 0.15s;
+        }
+        .type-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-light); }
+        .type-btn.active { border-color: var(--primary); background: var(--primary-light); color: #1D4ED8; }
+        .type-btn-icon { font-size: 1.3rem; display: block; margin-bottom: 4px; }
+        .type-btn-note { font-size: 0.7rem; font-weight: 400; opacity: 0.8; margin-top: 2px; }
+
+        /* ── Settings row ── */
+        .settings-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 480px) { .settings-row { grid-template-columns: 1fr; } }
+
+        /* ── Divider ── */
+        .divider {
+            border: none; border-top: 1px dashed var(--border); margin: 16px 0;
+        }
+
+        /* ── Custom grammar add ── */
+        .custom-grammar-row { display: flex; gap: 8px; margin-top: 8px; }
+        .custom-grammar-row input { flex: 1; font-size: 0.85rem; padding: 8px 10px; }
+
+        /* ── Buttons ── */
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 8px; font-size: 0.875rem;
+            font-weight: 700; cursor: pointer; transition: all 0.15s; display: inline-flex;
+            align-items: center; gap: 6px; font-family: inherit; white-space: nowrap;
+        }
+        .btn-primary {
+            background: var(--primary); color: white;
+            box-shadow: 0 4px 14px rgba(79,127,255,0.4);
+        }
+        .btn-primary:hover { background: #3A6FEE; transform: translateY(-1px); }
+        .btn-primary:active { transform: translateY(0); }
+        .btn-primary:disabled { background: #94A3B8; box-shadow: none; transform: none; cursor: not-allowed; }
+        .btn-outline { background: white; color: var(--text); border: 2px solid var(--border); }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+        .btn-generate {
+            font-size: clamp(1rem, 3vw, 1.15rem); padding: 16px 32px; border-radius: 12px;
+            width: 100%; max-width: 420px; justify-content: center;
+        }
+        .generate-wrap { text-align: center; margin: 6px 0 4px; }
+
+        /* ── Loading ── */
+        .loading {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; padding: 48px 20px; gap: 16px; color: var(--text-muted);
+        }
+        .spinner {
+            width: 36px; height: 36px; border: 4px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Results ── */
+        .results-header {
+            display: flex; justify-content: space-between; align-items: flex-start;
+            margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+        }
+        .results-title { font-size: 1.05rem; font-weight: 800; }
+        .results-sub { font-size: 0.82rem; color: var(--text-muted); margin-top: 2px; }
+        .results-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        /* ── Problem card ── */
+        .problem-card {
+            background: white; border: 2px solid var(--border); border-radius: 12px;
+            padding: 18px; margin-bottom: 10px; transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .problem-card:hover { border-color: #CBD5E1; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .problem-num {
+            font-size: 0.72rem; font-weight: 800; color: var(--primary);
+            text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+        }
+        .problem-type-badge {
+            display: inline-block; font-size: 0.7rem; font-weight: 700;
+            padding: 1px 8px; border-radius: 4px; margin-left: 6px;
+            background: #F0FDF4; color: #166534; vertical-align: middle;
+        }
+        .problem-type-badge.fill { background: #FFF7ED; color: #9A3412; }
+        .problem-type-badge.order { background: #F5F3FF; color: #5B21B6; }
+        .problem-korean { font-size: clamp(1rem, 3vw, 1.15rem); font-weight: 600; margin-bottom: 10px; line-height: 1.5; }
+        .problem-hint {
+            font-size: 0.82rem; color: #92400E; background: #FFFBEB;
+            border-radius: 6px; padding: 7px 12px; margin-bottom: 10px;
+            border-left: 3px solid var(--warning);
+        }
+        .scrambled-words {
+            display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;
+        }
+        .scrambled-word {
+            background: #F5F3FF; color: #5B21B6; border: 1px solid #DDD6FE;
+            border-radius: 6px; padding: 4px 10px; font-size: 0.85rem; font-weight: 700;
+        }
+        .fill-sentence {
+            font-size: 1rem; font-weight: 600; color: #1E293B;
+            background: #F8FAFC; border-radius: 6px; padding: 8px 12px; margin-bottom: 10px;
+            border: 1px solid var(--border);
+        }
+        .blank { display: inline-block; min-width: 70px; border-bottom: 2px solid var(--primary); margin: 0 2px; }
+        .problem-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+        .tag { background: var(--primary-light); color: #1D4ED8; padding: 2px 9px; border-radius: 5px; font-size: 0.75rem; font-weight: 700; }
+        .tag-grammar { background: #F0FDF4; color: #166534; }
+        .answer-area { display: flex; flex-direction: column; gap: 8px; }
+        .answer-toggle {
+            align-self: flex-start; background: none; border: 2px solid var(--success);
+            color: var(--success); border-radius: 8px; padding: 6px 16px;
+            font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: all 0.15s; font-family: inherit;
+        }
+        .answer-toggle:hover { background: var(--success); color: white; }
+        .answer-box {
+            display: none; padding: 12px 16px; background: #F0FDF4;
+            border: 2px solid var(--success); border-radius: 8px;
+        }
+        .answer-box.visible { display: block; }
+        .answer-en { font-size: clamp(0.95rem, 3vw, 1.05rem); font-weight: 700; color: #14532D; }
+        .answer-grammar { font-size: 0.78rem; color: #166534; margin-top: 5px; opacity: 0.85; }
+
+        /* ── Error ── */
+        .error-box {
+            background: #FEF2F2; border: 2px solid #FCA5A5;
+            border-radius: 10px; padding: 16px; color: #B91C1C; font-size: 0.875rem;
+        }
+
+        /* ── Badges ── */
+        .pill-ok { display: inline-block; background: #D1FAE5; color: #065F46; border-radius: 20px; padding: 2px 10px; font-size: 0.78rem; font-weight: 700; }
+        .pill-pdf { display: inline-block; background: var(--primary-light); color: var(--primary); border-radius: 20px; padding: 2px 10px; font-size: 0.78rem; font-weight: 700; }
+        .active-count { font-size: 0.72rem; background: var(--primary); color: white; border-radius: 10px; padding: 1px 7px; margin-left: 4px; font-weight: 700; }
+
+        /* ── Collapse toggle ── */
+        .collapse-icon { font-size: 0.7rem; transition: transform 0.2s; display: inline-block; }
+        .collapsed .collapse-icon { transform: rotate(-90deg); }
+
+        /* ── Util ── */
+        .mt-8 { margin-top: 8px; }
+        .mt-12 { margin-top: 12px; }
+        .text-muted { color: var(--text-muted); font-size: 0.83rem; }
+
+        /* ── Print ── */
+        @media print {
+            .no-print { display: none !important; }
+            .answer-box { display: block !important; }
+            .answer-toggle { display: none !important; }
+            body { background: white; }
+            .header { background: #4F7FFF !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .card, .problem-card { box-shadow: none !important; }
+            .problem-card { break-inside: avoid; margin-bottom: 14px; }
+            /* 문제만 인쇄 모드 */
+            body.print-no-answers .answer-box { display: none !important; }
+            body.print-no-answers .answer-area { display: none !important; }
+            .main { padding: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header no-print">
+    <h1>✏️ 영작 문제 생성기</h1>
+    <p>단어·문법 자료를 입력하면 AI가 학년 맞춤 영작 문제를 자동 생성합니다</p>
+    <button onclick="startTutorial()" style="margin-top:12px; padding:7px 18px; background:rgba(255,255,255,0.2); border:1.5px solid rgba(255,255,255,0.6); border-radius:20px; color:white; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit;">📖 처음 사용법 보기</button>
+</div>
+
+<div class="main">
+
+    <!-- API Key -->
+    <details class="api-details no-print" id="apiSection">
+        <summary>
+            <span>⚙️</span> Claude API 키 설정
+            <span id="apiStatus" style="margin-left:auto"></span>
+        </summary>
+        <div class="api-key-row">
+            <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." />
+            <button class="btn btn-outline btn-sm" onclick="saveApiKey()">저장</button>
+            <button class="btn btn-outline btn-sm" onclick="testApiKey()" id="testBtn">연결 테스트</button>
+        </div>
+        <div id="testResult" style="margin-top:8px; font-size:0.82rem;"></div>
+        <p class="api-note">🔒 API 키는 이 브라우저에만 저장되며 외부로 전송되지 않습니다.</p>
+    </details>
+
+    <!-- Step 1: Grade -->
+    <div class="card no-print">
+        <div class="card-title"><div class="step-badge">1</div> 학년 선택</div>
+        <div class="grade-group">
+            <div class="grade-label">초등학교</div>
+            <div class="grade-buttons">
+                <button class="grade-btn" data-grade="초1" onclick="selectGrade(this)">초 1</button>
+                <button class="grade-btn" data-grade="초2" onclick="selectGrade(this)">초 2</button>
+                <button class="grade-btn" data-grade="초3" onclick="selectGrade(this)">초 3</button>
+                <button class="grade-btn" data-grade="초4" onclick="selectGrade(this)">초 4</button>
+                <button class="grade-btn" data-grade="초5" onclick="selectGrade(this)">초 5</button>
+                <button class="grade-btn" data-grade="초6" onclick="selectGrade(this)">초 6</button>
+            </div>
+        </div>
+        <div class="grade-group">
+            <div class="grade-label">중학교</div>
+            <div class="grade-buttons">
+                <button class="grade-btn" data-grade="중1" onclick="selectGrade(this)">중 1</button>
+                <button class="grade-btn" data-grade="중2" onclick="selectGrade(this)">중 2</button>
+                <button class="grade-btn" data-grade="중3" onclick="selectGrade(this)">중 3</button>
+            </div>
+        </div>
+        <div class="grade-desc" id="gradeDesc"></div>
+    </div>
+
+    <!-- Step 2: Materials -->
+    <div class="card no-print">
+        <div class="card-title"><div class="step-badge">2</div> 학습 자료 입력</div>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('text', this)">✏️ 직접 입력</button>
+            <button class="tab-btn" onclick="switchTab('pdf', this)">📄 PDF 업로드</button>
+            <button class="tab-btn" onclick="switchTab('image', this)">🖼️ 이미지</button>
+        </div>
+        <div class="tab-panel active" id="tab-text">
+            <div class="form-group">
+                <label>단어 목록 (줄바꿈 또는 쉼표로 구분)</label>
+                <textarea id="vocabInput" rows="5" placeholder="예시:
+apple, banana, eat, run, happy, school
+또는 줄바꿈으로 구분:
+apple
+banana
+eat"></textarea>
+                <div id="vocabPosArea" style="display:none;margin-top:10px;padding:12px;background:var(--primary-light);border-radius:10px;">
+                    <div style="font-size:0.75rem;font-weight:700;color:#1E40AF;margin-bottom:10px;">단어별 품사 설정 <span style="font-weight:400;color:var(--text-muted)">(기본: 모든 품사 허용 / 제한하려면 해제)</span></div>
+                    <div id="vocabPosList"></div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>추가 문법 메모 / 특이사항 <span style="font-weight:400; color:var(--text-muted)">(선택)</span></label>
+                <textarea id="grammarInput" rows="3" placeholder="아래 Step 3에서 문법을 선택하거나, 여기에 직접 메모할 수 있습니다.
+예: '3인칭 단수 -s 주의', '불규칙 과거형 포함'"></textarea>
+            </div>
+        </div>
+        <div class="tab-panel" id="tab-pdf">
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('pdfFile').click()">
+                <div class="upload-icon">📄</div>
+                <div class="upload-hint">
+                    <strong>클릭하여 PDF 선택</strong> 또는 이 영역에 드래그<br>
+                    <span style="font-size:0.8rem; margin-top:6px; display:block">교재, 단어장, 학습지 PDF를 올리면 텍스트를 자동으로 추출합니다</span>
+                </div>
+                <input type="file" id="pdfFile" accept=".pdf" onchange="handlePdfUpload(event)">
+            </div>
+            <div id="pdfStatus" class="mt-8"></div>
+            <div id="pdfPreview" style="display:none;" class="mt-8">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <label style="margin:0">추출된 텍스트 (수정 가능)</label>
+                    <button class="btn btn-outline btn-sm" onclick="clearPdf()">초기화</button>
+                </div>
+                <textarea id="pdfText" rows="7" style="font-size:0.82rem; font-family: monospace;"></textarea>
+            </div>
+        </div>
+        <div class="tab-panel" id="tab-image">
+            <div class="upload-area" id="imageUploadArea" onclick="document.getElementById('imageFile').click()">
+                <div class="upload-icon">🖼️</div>
+                <div class="upload-hint">
+                    <strong>클릭하여 이미지 선택</strong> 또는 이 영역에 드래그<br>
+                    <span style="font-size:0.8rem; margin-top:6px; display:block">여러 장 동시 선택 가능 (JPG, PNG, WEBP) · 최대 10장</span>
+                </div>
+                <input type="file" id="imageFile" accept="image/*" multiple onchange="handleImageUpload(event)">
+            </div>
+            <div id="imageStatus" class="mt-8"></div>
+            <div id="imagePreview" style="display:none;" class="mt-8">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="margin:0">업로드된 이미지 <span id="imageCount" style="color:var(--primary);font-weight:700;"></span></label>
+                    <button class="btn btn-outline btn-sm" onclick="clearAllImages()">전체 삭제</button>
+                </div>
+                <div id="imageGrid" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 3: 세부 설정 -->
+    <div class="card no-print">
+        <div class="card-title"><div class="step-badge">3</div> 세부 설정</div>
+
+        <!-- 3-A: 문법 선택 -->
+        <div style="margin-bottom: 20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                <label style="margin:0; font-size:0.85rem;">문법 선택 <span id="grammarSelectedCount" class="active-count">0</span></label>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-outline btn-sm" onclick="selectAllGrammar()">전체 선택</button>
+                    <button class="btn btn-outline btn-sm" onclick="clearAllGrammar()">전체 해제</button>
+                    <button class="btn btn-outline btn-sm" onclick="applyGradeDefaults()" id="gradeDefaultBtn" style="display:none">학년 기본값</button>
+                </div>
+            </div>
+            <div id="grammarChipsContainer"></div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- 3-B: 주제 선택 -->
+        <div style="margin-bottom: 20px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+                <label style="margin:0; font-size:0.85rem;">문장 주제 <span id="topicSelectedCount" class="active-count">0</span> <span style="font-weight:400; color:var(--text-muted)">(선택 안 하면 다양하게)</span></label>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-outline btn-sm" onclick="clearAllTopics()">전체 해제</button>
+                </div>
+            </div>
+            <div class="chips-wrap" id="topicChipsContainer"></div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- 3-C: 난이도 미세 조절 -->
+        <div style="margin-bottom: 20px;">
+            <label style="font-size:0.85rem; margin-bottom:10px; display:block;">난이도 미세 조절</label>
+            <div class="difficulty-wrap">
+                <div class="difficulty-labels">
+                    <span>매우 쉬움</span><span>쉬움</span><span>보통</span><span>어려움</span><span>매우 어려움</span>
+                </div>
+                <input type="range" id="difficultySlider" min="1" max="5" value="3"
+                    oninput="updateDifficultyLabel(this)">
+                <div class="difficulty-value" id="difficultyLabel">보통 (학년 수준에 맞게)</div>
+            </div>
+        </div>
+
+        <hr class="divider">
+
+        <!-- 3-D: 문제 유형 -->
+        <div>
+            <label style="font-size:0.85rem; margin-bottom:10px; display:block;">문제 유형 <span style="font-weight:400; color:var(--text-muted)">(복수 선택 가능)</span></label>
+            <div class="type-btns">
+                <button class="type-btn active" data-type="translate" onclick="toggleType(this)">
+                    <span class="type-btn-icon">📝</span>
+                    한→영 번역
+                    <div class="type-btn-note">한국어 문장을 영어로</div>
+                </button>
+                <button class="type-btn" data-type="fill" onclick="toggleType(this)">
+                    <span class="type-btn-icon">🔲</span>
+                    빈칸 채우기
+                    <div class="type-btn-note">핵심 단어를 빈칸으로</div>
+                </button>
+                <button class="type-btn" data-type="order" onclick="toggleType(this)">
+                    <span class="type-btn-icon">🔀</span>
+                    단어 배열
+                    <div class="type-btn-note">순서 바꾼 단어 정렬</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step 4: 생성 설정 -->
+    <div class="card no-print">
+        <div class="card-title"><div class="step-badge">4</div> 생성 설정</div>
+        <div class="settings-row">
+            <div class="form-group">
+                <label>문제 수</label>
+                <select id="problemCount">
+                    <option value="5">5문제</option>
+                    <option value="10" selected>10문제</option>
+                    <option value="15">15문제</option>
+                    <option value="20">20문제</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>힌트 수준</label>
+                <select id="hintLevel">
+                    <option value="full">상세 힌트 (첫 단어 + 단어 수)</option>
+                    <option value="partial" selected>부분 힌트 (핵심 단어 1~2개)</option>
+                    <option value="none">힌트 없음</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generate -->
+    <div class="generate-wrap no-print">
+        <button class="btn btn-primary btn-generate" onclick="generateProblems()" id="generateBtn">
+            ✨ 문제 생성하기
+        </button>
+    </div>
+
+    <!-- Results -->
+    <div id="resultsSection" style="display:none; margin-top: 20px;">
+        <div class="results-header">
+            <div>
+                <div class="results-title" id="resultsTitle"></div>
+                <div class="results-sub" id="resultsSub"></div>
+            </div>
+            <div class="results-actions no-print">
+                <button class="btn btn-outline btn-sm" onclick="toggleAllAnswers()" id="toggleAllBtn">정답 모두 보기</button>
+                <button class="btn btn-outline btn-sm" onclick="printWithAnswers()">🖨️ 정답 포함 인쇄</button>
+                <button class="btn btn-outline btn-sm" onclick="printNoAnswers()">📝 문제만 인쇄</button>
+                <button class="btn btn-outline btn-sm" onclick="generateProblems()">🔄 재생성</button>
+            </div>
+        </div>
+        <div id="problemsList"></div>
+    </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// 브라우저에서 Anthropic API 직접 호출 (anthropic-dangerous-direct-browser-access 헤더로 CORS 허용)
+const API_URL = 'https://api.anthropic.com/v1/messages';
+const API_HEADERS_EXTRA = { 'anthropic-dangerous-direct-browser-access': 'true' };
+
+// ════════════════════════════════════════
+// DATA
+// ════════════════════════════════════════
+
+const GRADE_INFO = {
+    '초1': { name:'초등학교 1학년', desc:'주어+동사 3~5단어 / be동사 기초 / 색깔·숫자·가족', example:'"나는 행복해요." → "I am happy."', maxWords:5, hintDefault:'full', guide:'매우 짧은 단문. I/You/He/She 위주. 어려운 단어 금지.' },
+    '초2': { name:'초등학교 2학년', desc:'주어+동사(+목적어) 4~6단어 / be동사+일반동사 / 일상 사물', example:'"나는 사과를 먹어요." → "I eat an apple."', maxWords:6, hintDefault:'full', guide:'단문 위주. 일상적인 동작과 사물. 복잡한 구조 피할 것.' },
+    '초3': { name:'초등학교 3학년', desc:'5~8단어 / 현재형·명령문 / 감정·학교 생활', example:'"그녀는 공원에서 뛰어요." → "She runs in the park."', maxWords:8, hintDefault:'partial', guide:'단순 현재형. 장소 전치사(in,at,on) 사용 가능.' },
+    '초4': { name:'초등학교 4학년', desc:'6~9단어 / 현재·과거형 / 의문문·부정문 / 취미·음식', example:'"나는 어제 숙제를 했어요." → "I did my homework yesterday."', maxWords:9, hintDefault:'partial', guide:'과거형 규칙·불규칙 동사 포함. 의문문 구조 연습.' },
+    '초5': { name:'초등학교 5학년', desc:'7~11단어 / 미래형(will/be going to) / 현재진행형', example:'"나는 내일 친구를 만날 거예요." → "I will meet my friend tomorrow."', maxWords:11, hintDefault:'partial', guide:'시제를 다양하게 활용. 부사구와 전치사구 포함 가능.' },
+    '초6': { name:'초등학교 6학년', desc:'8~12단어 / 복합 문장(and/but/because/when) / 다양한 시제', example:'"숙제를 마친 후에 TV를 봤어요." → "He watched TV after he finished his homework."', maxWords:12, hintDefault:'partial', guide:'접속사로 연결된 복합문. 비교급·최상급도 가능.' },
+    '중1': { name:'중학교 1학년', desc:'10~14단어 / 시제 전반·조동사 / 관계대명사 입문', example:'"그것은 내가 원하는 책이에요." → "That is the book that I want."', maxWords:14, hintDefault:'none', guide:'다양한 조동사 활용. 관계대명사(that/which/who) 입문.' },
+    '중2': { name:'중학교 2학년', desc:'12~16단어 / 수동태·가정법 기초 / to부정사·동명사', example:'"그 케이크는 엄마가 만드셨어요." → "The cake was made by my mother."', maxWords:16, hintDefault:'none', guide:'수동태 포함. to부정사와 동명사 차이 연습.' },
+    '중3': { name:'중학교 3학년', desc:'14~18단어 / 가정법 과거·완료시제 / 분사구문', example:'"더 열심히 공부했다면 합격했을 텐데." → "If I had studied harder, I would have passed."', maxWords:18, hintDefault:'none', guide:'가정법 과거·완료 포함. 복잡한 절 구조 사용 가능.' }
+};
+
+// Grammar chips: { id, label, description }
+const GRAMMAR_CATEGORIES = [
+    {
+        id: 'tense', label: '시제', color: 'primary',
+        items: [
+            { id:'present',      label:'현재형',          desc:'일반동사 현재형 (I eat, She runs)' },
+            { id:'past',         label:'과거형',          desc:'규칙/불규칙 과거형 (I ate, She ran)' },
+            { id:'future_will',  label:'미래 will',       desc:'I will + 동사원형' },
+            { id:'future_going', label:'be going to',     desc:'am/is/are going to + 동사원형' },
+            { id:'present_prog', label:'현재진행형',       desc:'am/is/are + ~ing' },
+            { id:'past_prog',    label:'과거진행형',       desc:'was/were + ~ing' },
+            { id:'present_perf', label:'현재완료',        desc:'have/has + p.p.' },
+            { id:'past_perf',    label:'과거완료',        desc:'had + p.p.' },
+        ]
+    },
+    {
+        id: 'sentence', label: '문장 구조', color: 'green',
+        items: [
+            { id:'declarative',  label:'평서문',          desc:'기본 긍정 문장' },
+            { id:'negative',     label:'부정문',          desc:'don\'t/doesn\'t/isn\'t 등' },
+            { id:'question_yn',  label:'Yes/No 의문문',   desc:'Do you...? Is she...?' },
+            { id:'question_wh',  label:'Wh- 의문문',      desc:'What/Where/When/Who/How...' },
+            { id:'imperative',   label:'명령문',          desc:'동사원형으로 시작 (Open the door.)' },
+            { id:'exclamatory',  label:'감탄문',          desc:'How+형용사! / What+명사!' },
+            { id:'there_is',     label:'There is/are',    desc:'There is a book. / There are...' },
+        ]
+    },
+    {
+        id: 'modal', label: '조동사', color: 'purple',
+        items: [
+            { id:'can',          label:'can / can\'t',    desc:'능력, 허가 표현' },
+            { id:'must',         label:'must / have to',  desc:'의무, 필요 표현' },
+            { id:'should',       label:'should',          desc:'조언, 충고 표현' },
+            { id:'may_might',    label:'may / might',     desc:'가능성, 허가 표현' },
+            { id:'would_could',  label:'would / could',   desc:'정중한 요청, 과거 가능' },
+        ]
+    },
+    {
+        id: 'phrase', label: '구문', color: 'primary',
+        items: [
+            { id:'to_inf',       label:'to부정사',        desc:'want to, need to, to+동사원형' },
+            { id:'gerund',       label:'동명사',          desc:'enjoy ~ing, stop ~ing' },
+            { id:'comparative',  label:'비교급',          desc:'more/~er than' },
+            { id:'superlative',  label:'최상급',          desc:'the most/the ~est' },
+            { id:'conjunction',  label:'접속사',          desc:'and / but / or / because / so' },
+            { id:'time_clause',  label:'시간절',          desc:'when / after / before / while' },
+            { id:'condition',    label:'조건절 (if)',     desc:'If it rains, I will stay home.' },
+            { id:'relative',     label:'관계대명사',      desc:'who / which / that' },
+        ]
+    },
+    {
+        id: 'advanced', label: '고급', color: 'green',
+        items: [
+            { id:'passive',      label:'수동태',          desc:'be + p.p. (was made by...)' },
+            { id:'subj_pres',    label:'가정법 현재',     desc:'If+현재, will+동사원형' },
+            { id:'subj_past',    label:'가정법 과거',     desc:'If+과거, would+동사원형' },
+            { id:'reported',     label:'간접화법',        desc:'He said that...' },
+            { id:'participle',   label:'분사구문',        desc:'Running fast, he...' },
+        ]
+    }
+];
+
+// Grade defaults: which chip IDs to activate
+const GRADE_DEFAULTS = {
+    '초1': ['present','declarative','there_is'],
+    '초2': ['present','declarative','negative','question_yn'],
+    '초3': ['present','past','declarative','negative','question_yn','question_wh','imperative','can'],
+    '초4': ['present','past','declarative','negative','question_yn','question_wh','imperative','can','there_is'],
+    '초5': ['present','past','future_will','present_prog','declarative','negative','question_yn','question_wh','can','must','should','comparative','conjunction','time_clause','condition'],
+    '초6': ['present','past','future_will','future_going','present_prog','declarative','negative','question_yn','question_wh','can','must','should','comparative','superlative','conjunction','time_clause','condition'],
+    '중1': ['present','past','future_will','future_going','present_prog','declarative','negative','question_yn','question_wh','can','must','should','may_might','would_could','comparative','superlative','conjunction','time_clause','condition','to_inf','gerund','relative'],
+    '중2': ['present','past','future_will','present_prog','past_prog','declarative','negative','question_yn','question_wh','can','must','should','may_might','would_could','comparative','superlative','conjunction','time_clause','condition','to_inf','gerund','relative','passive','subj_pres'],
+    '중3': ['present','past','future_will','present_perf','past_perf','present_prog','declarative','negative','question_yn','question_wh','can','must','should','may_might','would_could','comparative','superlative','conjunction','time_clause','condition','to_inf','gerund','relative','passive','subj_pres','subj_past','reported','participle'],
+};
+
+const TOPICS = [
+    '학교·교실', '가족·집', '음식·요리', '여행·교통', '스포츠·운동',
+    '날씨·계절', '취미·여가', '쇼핑·시장', '동물·자연', '감정·느낌',
+    '친구·관계', '꿈·진로', '건강·병원', '도시·장소'
+];
+
+const DIFFICULTY_LABELS = {
+    1: '매우 쉬움 (한 단계 아래 수준)',
+    2: '쉬움 (약간 낮은 수준)',
+    3: '보통 (학년 수준에 맞게)',
+    4: '어려움 (약간 높은 수준)',
+    5: '매우 어려움 (한 단계 위 수준)',
+};
+
+// ════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════
+let selectedGrade = null;
+let allAnswersShown = false;
+let activeGrammarIds = new Set();
+let activeTopics = new Set();
+let vocabPOS = new Map(); // word → Set<'noun'|'verb'|'adj'|'adv'>
+const POS_OPTIONS = [
+    { key: 'noun', label: '명사' },
+    { key: 'verb', label: '동사' },
+    { key: 'adj',  label: '형용사' },
+    { key: 'adv',  label: '부사' },
+];
+let activeTypes = new Set(['translate']); // default
+
+// ════════════════════════════════════════
+// INIT: Build chip UI
+// ════════════════════════════════════════
+function buildGrammarChips() {
+    const container = document.getElementById('grammarChipsContainer');
+    container.innerHTML = '';
+    GRAMMAR_CATEGORIES.forEach(cat => {
+        const section = document.createElement('div');
+        section.className = 'chip-section';
+        section.id = `cat-${cat.id}`;
+        section.innerHTML = `
+            <div class="chip-section-header" onclick="toggleCatCollapse('${cat.id}')">
+                <span class="chip-section-title">${cat.label} <span class="collapse-icon">▾</span></span>
+                <div class="chip-section-actions" onclick="event.stopPropagation()">
+                    <button class="chip-mini-btn" onclick="selectCatAll('${cat.id}')">전부</button>
+                    <button class="chip-mini-btn" onclick="clearCatAll('${cat.id}')">해제</button>
+                </div>
+            </div>
+            <div class="chips-wrap" id="chips-${cat.id}">
+                ${cat.items.map(item => `
+                    <button class="chip" id="chip-${item.id}" data-id="${item.id}"
+                        title="${item.desc}"
+                        onclick="toggleGrammarChip('${item.id}')">
+                        ${item.label}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+        container.appendChild(section);
+    });
+}
+
+function buildTopicChips() {
+    const container = document.getElementById('topicChipsContainer');
+    container.innerHTML = TOPICS.map(t => `
+        <button class="chip" data-topic="${t}" onclick="toggleTopic(this)">${t}</button>
+    `).join('');
+}
+
+function toggleCatCollapse(catId) {
+    const section = document.getElementById(`cat-${catId}`);
+    const chips = document.getElementById(`chips-${catId}`);
+    section.classList.toggle('collapsed');
+    chips.classList.toggle('chips-collapsed');
+}
+
+function selectCatAll(catId) {
+    const cat = GRAMMAR_CATEGORIES.find(c => c.id === catId);
+    cat.items.forEach(item => {
+        activeGrammarIds.add(item.id);
+        document.getElementById(`chip-${item.id}`)?.classList.add('active');
+    });
+    updateGrammarCount();
+}
+
+function clearCatAll(catId) {
+    const cat = GRAMMAR_CATEGORIES.find(c => c.id === catId);
+    cat.items.forEach(item => {
+        activeGrammarIds.delete(item.id);
+        document.getElementById(`chip-${item.id}`)?.classList.remove('active');
+    });
+    updateGrammarCount();
+}
+
+function toggleGrammarChip(id) {
+    const btn = document.getElementById(`chip-${id}`);
+    if (activeGrammarIds.has(id)) {
+        activeGrammarIds.delete(id);
+        btn.classList.remove('active');
+    } else {
+        activeGrammarIds.add(id);
+        btn.classList.add('active');
+    }
+    updateGrammarCount();
+}
+
+function selectAllGrammar() {
+    GRAMMAR_CATEGORIES.forEach(cat => cat.items.forEach(item => {
+        activeGrammarIds.add(item.id);
+        document.getElementById(`chip-${item.id}`)?.classList.add('active');
+    }));
+    updateGrammarCount();
+}
+
+function clearAllGrammar() {
+    activeGrammarIds.clear();
+    document.querySelectorAll('#grammarChipsContainer .chip').forEach(c => c.classList.remove('active'));
+    updateGrammarCount();
+}
+
+function applyGradeDefaults() {
+    if (!selectedGrade) return;
+    clearAllGrammar();
+    const defaults = GRADE_DEFAULTS[selectedGrade] || [];
+    defaults.forEach(id => {
+        activeGrammarIds.add(id);
+        document.getElementById(`chip-${id}`)?.classList.add('active');
+    });
+    updateGrammarCount();
+}
+
+function updateGrammarCount() {
+    document.getElementById('grammarSelectedCount').textContent = activeGrammarIds.size;
+}
+
+function toggleTopic(btn) {
+    const t = btn.dataset.topic;
+    if (activeTopics.has(t)) { activeTopics.delete(t); btn.classList.remove('active'); }
+    else { activeTopics.add(t); btn.classList.add('active'); }
+    document.getElementById('topicSelectedCount').textContent = activeTopics.size;
+}
+
+function clearAllTopics() {
+    activeTopics.clear();
+    document.querySelectorAll('#topicChipsContainer .chip').forEach(c => c.classList.remove('active'));
+    document.getElementById('topicSelectedCount').textContent = 0;
+}
+
+function parseAndRenderVocabPOS() {
+    const raw = document.getElementById('vocabInput').value;
+    const words = [...new Set(raw.split(/[\n,，\s]+/).map(w => w.trim()).filter(w => w.length > 0 && /[a-zA-Z]/.test(w)))];
+    for (const w of vocabPOS.keys()) { if (!words.includes(w)) vocabPOS.delete(w); }
+    for (const w of words) { if (!vocabPOS.has(w)) vocabPOS.set(w, new Set(['noun','verb','adj','adv'])); }
+    renderVocabPOS(words);
+}
+
+function renderVocabPOS(words) {
+    const area = document.getElementById('vocabPosArea');
+    const list = document.getElementById('vocabPosList');
+    if (words.length === 0) { area.style.display = 'none'; return; }
+    area.style.display = 'block';
+    list.innerHTML = words.map(word => {
+        const posSet = vocabPOS.get(word) || new Set(['noun','verb','adj','adv']);
+        return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;">
+            <span style="font-weight:700;font-size:0.88rem;min-width:70px;">${word}</span>
+            ${POS_OPTIONS.map(p => {
+                const on = posSet.has(p.key);
+                return `<button type="button" onclick="toggleVocabPOS('${word}','${p.key}')"
+                    style="padding:3px 10px;border-radius:20px;border:1.5px solid ${on?'var(--primary)':'var(--border)'};
+                           background:${on?'var(--primary)':'white'};color:${on?'white':'var(--text-muted)'};
+                           cursor:pointer;font-size:0.78rem;font-family:inherit;font-weight:600;">${p.label}</button>`;
+            }).join('')}
+        </div>`;
+    }).join('');
+}
+
+function toggleVocabPOS(word, pos) {
+    const posSet = vocabPOS.get(word);
+    if (!posSet) return;
+    if (posSet.has(pos)) {
+        if (posSet.size === 1) return;
+        posSet.delete(pos);
+    } else {
+        posSet.add(pos);
+    }
+    renderVocabPOS([...vocabPOS.keys()]);
+}
+
+function toggleType(btn) {
+    const t = btn.dataset.type;
+    if (activeTypes.has(t)) {
+        if (activeTypes.size === 1) return; // 최소 1개는 유지
+        activeTypes.delete(t);
+        btn.classList.remove('active');
+    } else {
+        activeTypes.add(t);
+        btn.classList.add('active');
+    }
+}
+
+function updateDifficultyLabel(input) {
+    const v = parseInt(input.value);
+    document.getElementById('difficultyLabel').textContent = DIFFICULTY_LABELS[v];
+    const pct = ((v - 1) / 4 * 100).toFixed(0);
+    input.style.setProperty('--fill', pct + '%');
+}
+
+// Call on load
+window.addEventListener('load', () => {
+    buildGrammarChips();
+    buildTopicChips();
+    updateDifficultyLabel(document.getElementById('difficultySlider'));
+    document.getElementById('vocabInput').addEventListener('input', parseAndRenderVocabPOS);
+
+    const saved = localStorage.getItem('eq_claude_api_key');
+    if (saved) {
+        document.getElementById('apiKeyInput').value = saved;
+        document.getElementById('apiStatus').innerHTML = '<span class="pill-ok">✓ 저장됨</span>';
+    } else {
+        document.getElementById('apiSection').setAttribute('open', '');
+    }
+});
+
+// ════════════════════════════════════════
+// GRADE
+// ════════════════════════════════════════
+function selectGrade(btn) {
+    document.querySelectorAll('.grade-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedGrade = btn.dataset.grade;
+    const info = GRADE_INFO[selectedGrade];
+    const desc = document.getElementById('gradeDesc');
+    desc.innerHTML = `<strong>${info.name}</strong> — ${info.desc}<br><span style="color:#1D4ED8; margin-top:4px; display:block">예: ${info.example}</span>`;
+    desc.classList.add('visible');
+    // Auto-apply grade defaults
+    applyGradeDefaults();
+    document.getElementById('gradeDefaultBtn').style.display = 'inline-flex';
+    document.getElementById('hintLevel').value = info.hintDefault;
+}
+
+// ════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════
+function switchTab(tab, clickedBtn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    clickedBtn.classList.add('active');
+    document.getElementById('tab-text').classList.toggle('active', tab === 'text');
+    document.getElementById('tab-pdf').classList.toggle('active', tab === 'pdf');
+    document.getElementById('tab-image').classList.toggle('active', tab === 'image');
+}
+
+// ════════════════════════════════════════
+// API KEY
+// ════════════════════════════════════════
+function saveApiKey() {
+    const key = document.getElementById('apiKeyInput').value.trim();
+    if (!key) return alert('API 키를 입력해주세요.');
+    localStorage.setItem('eq_claude_api_key', key);
+    document.getElementById('apiStatus').innerHTML = '<span class="pill-ok">✓ 저장됨</span>';
+    document.getElementById('apiSection').removeAttribute('open');
+}
+function getApiKey() { return localStorage.getItem('eq_claude_api_key') || ''; }
+
+async function testApiKey() {
+    const key = document.getElementById('apiKeyInput').value.trim() || getApiKey();
+    const result = document.getElementById('testResult');
+    const btn = document.getElementById('testBtn');
+    if (!key) { result.innerHTML = '<span style="color:#dc2626">⚠️ API 키를 먼저 입력해주세요.</span>'; return; }
+    btn.disabled = true;
+    result.innerHTML = '<span style="color:#64748b">⏳ 연결 테스트 중...</span>';
+    try {
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': key,
+                'anthropic-version': '2023-06-01',
+                ...API_HEADERS_EXTRA,
+            },
+            body: JSON.stringify({
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 10,
+                messages: [{ role: 'user', content: 'hi' }]
+            })
+        });
+        if (res.ok) {
+            result.innerHTML = '<span style="color:#16a34a">✅ 연결 성공! API 키가 정상 작동합니다.</span>';
+            localStorage.setItem('eq_claude_api_key', key);
+            document.getElementById('apiStatus').innerHTML = '<span class="pill-ok">✓ 저장됨</span>';
+        } else {
+            const err = await res.json().catch(() => ({}));
+            result.innerHTML = `<span style="color:#dc2626">❌ 오류 ${res.status}: ${err.error?.message || '알 수 없는 오류'}</span>`;
+        }
+    } catch(e) {
+        result.innerHTML = `<span style="color:#dc2626">❌ Failed to fetch — CORS 문제일 가능성이 높습니다.<br>
+        브라우저 주소창이 <b>file://</b> 로 시작하면 VS Code Live Server나 아래 방법으로 열어주세요:<br>
+        <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px">python -m http.server 8000</code> 후 <b>localhost:8000</b> 접속</span>`;
+    }
+    btn.disabled = false;
+}
+
+// ════════════════════════════════════════
+// PDF
+// ════════════════════════════════════════
+const uploadArea = document.getElementById('uploadArea');
+uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('drag-over'); });
+uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+uploadArea.addEventListener('drop', e => {
+    e.preventDefault(); uploadArea.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file?.type === 'application/pdf') processPdf(file);
+    else alert('PDF 파일만 업로드 가능합니다.');
+});
+function handlePdfUpload(e) { if (e.target.files[0]) processPdf(e.target.files[0]); }
+
+async function processPdf(file) {
+    const status = document.getElementById('pdfStatus');
+    status.innerHTML = '<span class="text-muted">⏳ PDF 텍스트 추출 중...</span>';
+    try {
+        const buf = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            let lastY = null, pageText = '';
+            for (const item of content.items) {
+                if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) pageText += '\n';
+                pageText += item.str;
+                lastY = item.transform[5];
+            }
+            text += pageText + '\n\n';
+        }
+        text = text.replace(/[ \t]+/g, ' ').trim();
+
+        if (!text || text.length < 20) {
+            const maxPages = Math.min(pdf.numPages, 10);
+            status.innerHTML = `
+                <div class="error-box">
+                    <strong>텍스트 레이어 없음 — 스캔 PDF입니다</strong><br><br>
+                    AI 비전으로 이미지를 직접 읽을 수 있습니다.<br>
+                    <button class="btn btn-primary btn-sm" style="margin-top:10px;"
+                        onclick="convertPdfToImages(window._lastPdf, ${maxPages})">
+                        🤖 AI로 이미지 인식하기 (${maxPages}페이지)
+                    </button>
+                </div>`;
+            window._lastPdf = pdf;
+            return;
+        }
+
+        document.getElementById('pdfText').value = text;
+        document.getElementById('pdfPreview').style.display = 'block';
+        status.innerHTML = `<span class="pill-pdf">📄 ${pdf.numPages}페이지 추출 완료 — ${text.length.toLocaleString()}자</span>`;
+    } catch (err) {
+        status.innerHTML = `<div class="error-box">PDF 처리 오류: ${err.message}</div>`;
+    }
+}
+
+function clearPdf() {
+    document.getElementById('pdfText').value = '';
+    document.getElementById('pdfPreview').style.display = 'none';
+    document.getElementById('pdfStatus').innerHTML = '';
+    document.getElementById('pdfFile').value = '';
+}
+
+// ════════════════════════════════════════
+// IMAGE
+// ════════════════════════════════════════
+let currentImagesData = []; // [{ base64, mediaType, dataUrl, name }]
+
+const imageUploadArea = document.getElementById('imageUploadArea');
+imageUploadArea.addEventListener('dragover', e => { e.preventDefault(); imageUploadArea.classList.add('drag-over'); });
+imageUploadArea.addEventListener('dragleave', () => imageUploadArea.classList.remove('drag-over'));
+imageUploadArea.addEventListener('drop', e => {
+    e.preventDefault(); imageUploadArea.classList.remove('drag-over');
+    const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+    if (files.length) processImages(files);
+    else alert('이미지 파일(JPG, PNG, WEBP 등)만 업로드 가능합니다.');
+});
+function handleImageUpload(e) { if (e.target.files.length) processImages([...e.target.files]); }
+
+function compressImage(dataUrl) {
+    return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => {
+            const MAX = 1568;
+            let w = img.width, h = img.height;
+            if (w > MAX || h > MAX) {
+                if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+                else { w = Math.round(w * MAX / h); h = MAX; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = dataUrl;
+    });
+}
+
+async function processImages(files) {
+    const status = document.getElementById('imageStatus');
+    const remaining = 10 - currentImagesData.length;
+    if (remaining <= 0) { alert('최대 10장까지 업로드할 수 있습니다.'); return; }
+    const toProcess = files.slice(0, remaining);
+    if (files.length > remaining) alert(`최대 10장 제한으로 ${toProcess.length}장만 추가됩니다.`);
+
+    status.innerHTML = `<span class="text-muted">⏳ ${toProcess.length}장 처리 중...</span>`;
+    for (const file of toProcess) {
+        try {
+            await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const compressed = await compressImage(e.target.result);
+                    const base64 = compressed.split(',')[1];
+                    currentImagesData.push({ base64, mediaType: 'image/jpeg', dataUrl: compressed, name: file.name });
+                    resolve();
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        } catch (err) {
+            status.innerHTML = `<div class="error-box">이미지 처리 오류 (${file.name}): ${err.message}</div>`;
+        }
+    }
+    renderImageGrid();
+    status.innerHTML = `<span class="pill-pdf">🖼️ ${currentImagesData.length}장 준비 완료</span>`;
+    document.getElementById('imageFile').value = '';
+}
+
+function renderImageGrid() {
+    const preview = document.getElementById('imagePreview');
+    const grid = document.getElementById('imageGrid');
+    const count = document.getElementById('imageCount');
+    if (currentImagesData.length === 0) { preview.style.display = 'none'; return; }
+    preview.style.display = 'block';
+    count.textContent = `(${currentImagesData.length}장)`;
+    grid.innerHTML = currentImagesData.map((img, i) => `
+        <div style="position:relative;width:90px;height:90px;flex-shrink:0;">
+            <img src="${img.dataUrl}" style="width:90px;height:90px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border);" title="${escapeHtml(img.name)}">
+            <button onclick="removeImage(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#EF4444;color:white;border:none;cursor:pointer;font-size:12px;line-height:20px;text-align:center;padding:0;">✕</button>
+            <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.5);color:white;font-size:10px;text-align:center;border-radius:0 0 6px 6px;padding:2px;">${i+1}</div>
+        </div>`).join('');
+}
+
+function removeImage(idx) {
+    currentImagesData.splice(idx, 1);
+    renderImageGrid();
+    document.getElementById('imageStatus').innerHTML = currentImagesData.length > 0
+        ? `<span class="pill-pdf">🖼️ ${currentImagesData.length}장 준비 완료</span>` : '';
+}
+
+function clearAllImages() {
+    currentImagesData = [];
+    renderImageGrid();
+    document.getElementById('imageStatus').innerHTML = '';
+    document.getElementById('imageFile').value = '';
+}
+
+// ════════════════════════════════════════
+// GET SETTINGS SUMMARY
+// ════════════════════════════════════════
+async function convertPdfToImages(pdf, maxPages) {
+    const status = document.getElementById('pdfStatus');
+    status.innerHTML = `<span class="text-muted">⏳ ${maxPages}페이지를 이미지로 변환 중...</span>`;
+    try {
+        const newImages = [];
+        for (let i = 1; i <= maxPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 1.5 });
+            const canvas = document.createElement('canvas');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const base64 = dataUrl.split(',')[1];
+            newImages.push({ base64, mediaType: 'image/jpeg', dataUrl, name: `PDF p.${i}` });
+        }
+        // 10장 제한
+        const available = 10 - currentImagesData.length;
+        currentImagesData.push(...newImages.slice(0, available));
+        renderImageGrid();
+        // 이미지 탭으로 전환
+        switchTab('image', document.querySelector('.tab-btn[onclick*="image"]'));
+        document.getElementById('imageStatus').innerHTML = `<span class="pill-pdf">🖼️ PDF ${maxPages}페이지 → 이미지 변환 완료 (${currentImagesData.length}장)</span>`;
+        status.innerHTML = `<span class="pill-pdf">✅ 이미지 탭으로 이동했습니다</span>`;
+    } catch (err) {
+        status.innerHTML = `<div class="error-box">변환 오류: ${err.message}</div>`;
+    }
+}
+
+function getSelectedGrammarLabels() {
+    const labels = [];
+    GRAMMAR_CATEGORIES.forEach(cat => {
+        cat.items.forEach(item => {
+            if (activeGrammarIds.has(item.id)) labels.push(`${item.label} (${item.desc})`);
+        });
+    });
+    return labels;
+}
+
+function getDifficultyGuide(grade, diffValue) {
+    const info = GRADE_INFO[grade];
+    const adjustedWords = Math.max(3, Math.min(20, info.maxWords + (diffValue - 3) * 2));
+    const guides = {
+        1: `매우 쉽게. 최대 ${adjustedWords}단어. 가장 기초적인 표현만 사용. 모르는 단어 없게.`,
+        2: `약간 쉽게. 최대 ${adjustedWords}단어. 익숙한 표현 위주.`,
+        3: `학년 수준. 최대 ${adjustedWords}단어. ${info.guide}`,
+        4: `약간 어렵게. 최대 ${adjustedWords}단어. 다양한 구조 활용.`,
+        5: `도전적으로. 최대 ${adjustedWords}단어. 복잡한 문장 구조 포함. 이 학년의 상위권 수준.`,
+    };
+    return { text: guides[diffValue], maxWords: adjustedWords };
+}
+
+// ════════════════════════════════════════
+// GENERATE
+// ════════════════════════════════════════
+// ════════════════════════════════════════
+// LOCAL (DEMO) GENERATOR — API 키 없을 때 폴백
+// ════════════════════════════════════════
+function generateProblemsLocally(vocab, pdfText, count, typeArr) {
+    const problems = [];
+    let num = 1;
+
+    // 1) PDF/직접입력 텍스트에서 영어 문장 추출
+    let sentences = [];
+    if (pdfText) {
+        sentences = pdfText
+            .replace(/\n+/g, ' ')
+            .split(/(?<=[.!?])\s+/)
+            .map(s => s.trim())
+            .filter(s => {
+                const enChars = (s.match(/[a-zA-Z]/g) || []).length;
+                return s.length > 15 && s.length < 180 && enChars > s.length * 0.35;
+            });
+    }
+
+    // 2) 단어 목록 파싱 (영어 단어 + 한국어 뜻 선택적)
+    const vocabPairs = [];
+    if (vocab) {
+        // 줄 단위로 "word - 뜻" / "word: 뜻" / "word 뜻" / "word" 처리
+        vocab.split(/\n/).forEach(line => {
+            line = line.trim().replace(/^[-•*\d.]+\s*/, '');
+            if (!line) return;
+            const m = line.match(/^([a-zA-Z][a-zA-Z '\-]*?)\s*[-:]\s*(.+)$/)
+                   || line.match(/^([a-zA-Z][a-zA-Z '\-]*?)\s+([\uAC00-\uD7A3].+)$/)
+                   || line.match(/^([a-zA-Z][a-zA-Z '\-]{1,25})$/);
+            if (m) vocabPairs.push({ en: m[1].trim(), ko: (m[2] || '').trim() });
+        });
+        // 쉼표 구분 폴백
+        if (vocabPairs.length === 0) {
+            vocab.split(/[,，]+/).forEach(w => {
+                w = w.trim();
+                if (/^[a-zA-Z][a-zA-Z '\-]{0,24}$/.test(w)) vocabPairs.push({ en: w, ko: '' });
+            });
+        }
+    }
+
+    // 3) 단어용 간단 문장 템플릿
+    const TMPLS = [
+        { en: 'I [w] every day.', ko: '나는 매일 [w]해.' },
+        { en: 'She likes [w].', ko: '그녀는 [w]를 좋아해.' },
+        { en: 'He can [w] well.', ko: '그는 [w]을 잘 할 수 있어.' },
+        { en: 'We need [w] here.', ko: '우리는 여기에 [w]가 필요해.' },
+        { en: 'I have a [w].', ko: '나는 [w]를 가지고 있어.' },
+        { en: 'The [w] is very good.', ko: '그 [w]는 정말 좋아.' },
+        { en: 'Please bring the [w].', ko: '[w]를 가져다줘.' },
+        { en: 'I want to [w].', ko: '[w]하고 싶어.' },
+        { en: 'They love [w].', ko: '그들은 [w]를 정말 좋아해.' },
+        { en: 'This is my [w].', ko: '이것은 내 [w]야.' },
+        { en: 'We can [w] together.', ko: '우리는 함께 [w]할 수 있어.' },
+        { en: 'She always [w]s at home.', ko: '그녀는 집에서 항상 [w]해.' },
+    ];
+
+    // 전역 shuffle 함수 사용
+
+    let sentIdx = 0, vocabIdx = 0, typeIdx = 0;
+
+    for (let i = 0; i < count; i++) {
+        const type = typeArr[typeIdx % typeArr.length];
+        typeIdx++;
+        let p = null;
+
+        if (sentences.length > 0) {
+            // ── 텍스트 기반 ──
+            const raw = sentences[sentIdx % sentences.length];
+            sentIdx++;
+            const sentence = raw.replace(/[.!?]+$/, '');
+            const words = sentence.split(/\s+/).filter(w => /^[a-zA-Z']+$/.test(w) && w.length > 2);
+
+            if (type === 'fill' && words.length >= 4) {
+                const bi = Math.max(1, Math.floor(words.length * 0.3 + Math.random() * words.length * 0.4));
+                const blank = words[bi];
+                const fillSent = sentence.replace(new RegExp('\\b' + blank.replace(/'/g, "\\'") + '\\b'), '___');
+                p = { num, type: 'fill', korean: '빈칸에 알맞은 단어를 써넣으세요.',
+                    english: sentence + '.', fill_sentence: fillSent + '.',
+                    blank_answers: [blank], hint: '', scrambled: [],
+                    vocab_used: [blank], grammar_point: '데모 모드' };
+
+            } else if (type === 'order' && words.length >= 3) {
+                const allW = sentence.split(/\s+/);
+                p = { num, type: 'order', korean: '다음 단어를 올바른 순서로 배열하세요.',
+                    english: sentence + '.', fill_sentence: '',
+                    blank_answers: [], hint: '첫 단어: ' + allW[0],
+                    scrambled: shuffle(allW), vocab_used: [], grammar_point: '데모 모드' };
+
+            } else if (type === 'translate') {
+                p = { num, type: 'translate',
+                    korean: '[데모] 다음 영어 문장을 한국어로 이해하고 다시 영작해보세요: ' + sentence,
+                    english: sentence + '.', fill_sentence: '', blank_answers: [],
+                    hint: '', scrambled: [], vocab_used: [], grammar_point: '데모 모드' };
+            }
+
+        } else if (vocabPairs.length > 0) {
+            // ── 단어 목록 기반 ──
+            const pair = vocabPairs[vocabIdx % vocabPairs.length];
+            vocabIdx++;
+            const tmpl = TMPLS[i % TMPLS.length];
+            const enSent = tmpl.en.replace('[w]', pair.en);
+            const koSent = pair.ko
+                ? tmpl.ko.replace('[w]', pair.ko)
+                : `"${pair.en}" 단어를 사용해 영작하세요.`;
+
+            if (type === 'translate') {
+                p = { num, type: 'translate', korean: koSent, english: enSent,
+                    fill_sentence: '', blank_answers: [], hint: pair.en,
+                    scrambled: [], vocab_used: [pair.en], grammar_point: '데모 모드' };
+
+            } else if (type === 'fill') {
+                const fillSent = enSent.replace(new RegExp('\\b' + pair.en + '\\b'), '___');
+                p = { num, type: 'fill', korean: koSent, english: enSent,
+                    fill_sentence: fillSent, blank_answers: [pair.en], hint: '',
+                    scrambled: [], vocab_used: [pair.en], grammar_point: '데모 모드' };
+
+            } else if (type === 'order') {
+                const wordArr = enSent.replace(/\.$/, '').split(' ');
+                p = { num, type: 'order', korean: koSent, english: enSent,
+                    fill_sentence: '', blank_answers: [], hint: '',
+                    scrambled: shuffle(wordArr), vocab_used: [pair.en], grammar_point: '데모 모드' };
+            }
+        }
+
+        if (p) { problems.push(p); num++; }
+    }
+    return problems;
+}
+
+async function generateProblems() {
+    if (!selectedGrade) return alert('학년을 선택해주세요.');
+    const apiKey = getApiKey();
+
+    const isPdf = document.getElementById('tab-pdf').classList.contains('active');
+    const isImage = document.getElementById('tab-image').classList.contains('active');
+    const vocab = document.getElementById('vocabInput').value.trim();
+    const extraGrammar = document.getElementById('grammarInput').value.trim();
+    const pdfText = document.getElementById('pdfText').value.trim();
+    if (!vocab && !extraGrammar && !pdfText && !(isImage && currentImagesData.length > 0)) return alert('단어, 문법, PDF 내용, 또는 이미지를 입력해주세요.');
+
+    const count = parseInt(document.getElementById('problemCount').value);
+    const hintLevel = document.getElementById('hintLevel').value;
+    const diffValue = parseInt(document.getElementById('difficultySlider').value);
+    const info = GRADE_INFO[selectedGrade];
+    const { text: diffGuide, maxWords } = getDifficultyGuide(selectedGrade, diffValue);
+
+    const grammarLabels = getSelectedGrammarLabels();
+    const topicList = [...activeTopics];
+    const typeList = [...activeTypes];
+
+    const btn = document.getElementById('generateBtn');
+    btn.disabled = true; btn.innerHTML = '⏳ 생성 중...';
+    document.getElementById('resultsSection').style.display = 'block';
+
+    // ── API 키 없으면 로컬 데모 모드 ──
+    if (!apiKey) {
+        document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+
+        let localText = isPdf ? pdfText : '';
+
+        // 이미지 탭: Tesseract OCR로 텍스트 추출
+        if (isImage && currentImagesData.length > 0) {
+            document.getElementById('problemsList').innerHTML = `
+                <div class="loading"><div class="spinner"></div>
+                <div>이미지에서 텍스트를 인식하고 있습니다... (데모 모드)</div></div>`;
+            try {
+                const { data: { text } } = await Tesseract.recognize(
+                    currentImagesData[0].dataUrl, 'eng+kor',
+                    { logger: m => {
+                        if (m.status === 'recognizing text') {
+                            document.getElementById('problemsList').innerHTML = `
+                                <div class="loading"><div class="spinner"></div>
+                                <div>OCR 진행 중... ${Math.round(m.progress * 100)}%</div></div>`;
+                        }
+                    }}
+                );
+                localText = text;
+            } catch (err) {
+                document.getElementById('problemsList').innerHTML = `
+                    <div class="error-box"><strong>OCR 오류</strong><br>${escapeHtml(err.message)}<br><br>
+                    <small>이미지 분석 기능은 API 키가 있을 때 훨씬 정확합니다.</small></div>`;
+                btn.disabled = false; btn.innerHTML = '✨ 문제 생성하기';
+                return;
+            }
+        } else {
+            document.getElementById('problemsList').innerHTML = `
+                <div class="loading"><div class="spinner"></div>
+                <div>데모 모드로 문제를 생성하고 있습니다...</div></div>`;
+            await new Promise(r => setTimeout(r, 400));
+        }
+
+        const problems = generateProblemsLocally(vocab, localText, count, typeList);
+        if (!problems.length) {
+            document.getElementById('problemsList').innerHTML = `
+                <div class="error-box"><strong>데모 모드: 생성 실패</strong><br>
+                단어 목록 또는 텍스트를 먼저 입력해주세요.</div>`;
+        } else {
+            renderProblems(problems, info, diffValue);
+            const typeNames = typeList.map(t => ({'translate':'한→영','fill':'빈칸','order':'어순'}[t])).join('·');
+            const modeLabel = isImage ? '이미지 OCR · 데모 모드' : '데모 모드 (API 키 없음)';
+            document.getElementById('resultsSub').textContent =
+                `${info.name} · ${typeNames} · ${modeLabel}`;
+        }
+        btn.disabled = false; btn.innerHTML = '✨ 문제 생성하기';
+        return;
+    }
+
+    document.getElementById('problemsList').innerHTML = `
+        <div class="loading"><div class="spinner"></div>
+        <div>AI가 <strong>${selectedGrade}</strong> 맞춤 문제 <strong>${count}개</strong>를 만들고 있습니다...</div></div>`;
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+
+    // ── Build materials section ──
+    let materialSection = '';
+    if (isImage && currentImagesData.length > 0) {
+        materialSection = `[이미지 자료 ${currentImagesData.length}장]\n첨부된 이미지들의 내용을 바탕으로 문제를 생성해주세요.`;
+    } else if (isPdf && pdfText) {
+        const preview = pdfText.length > 3000 ? pdfText.substring(0, 3000) + '...(이하 생략)' : pdfText;
+        materialSection = `[PDF 추출 자료]\n${preview}`;
+    } else {
+        if (vocab) {
+            const posLabels = { noun: '명사', verb: '동사', adj: '형용사', adv: '부사' };
+            const words = vocab.split(/[\n,，\s]+/).map(w => w.trim()).filter(w => w.length > 0);
+            const annotated = words.map(w => {
+                const posSet = vocabPOS.get(w);
+                if (!posSet || posSet.size === 4) return w;
+                const selected = [...posSet].map(p => posLabels[p]);
+                return `${w}(${selected.join(' 또는 ')}로만 사용)`;
+            }).join(', ');
+            materialSection += `[단어 목록]\n${annotated}\n\n`;
+        }
+    }
+    if (extraGrammar) materialSection += `[추가 문법 메모]\n${extraGrammar}\n\n`;
+
+    // ── Build grammar section ──
+    const grammarSection = grammarLabels.length > 0
+        ? `[사용할 문법 포인트 (선택된 ${grammarLabels.length}개)]\n${grammarLabels.map((g,i) => `${i+1}. ${g}`).join('\n')}`
+        : '[문법 포인트]\n학년에 적합한 기초 문법을 자유롭게 활용';
+
+    // ── Hint instruction ──
+    const hintGuide = {
+        full: '모든 문제에 힌트 제공: 첫 영어 단어와 전체 단어 수 (예: "Start: I / 4단어")',
+        partial: '절반 문제에만 힌트 제공. 핵심 단어 1~2개 (예: "힌트: eat, apple")',
+        none: 'hint 필드는 반드시 빈 문자열 ""로 설정',
+    }[hintLevel];
+
+    // ── Problem type instruction ──
+    const typeInstructions = [];
+    const totalCount = count;
+    const perType = Math.ceil(totalCount / typeList.length);
+
+    if (typeList.includes('translate')) typeInstructions.push(`한→영 번역: 한국어 문장을 영어로 번역. type:"translate"`);
+    if (typeList.includes('fill')) typeInstructions.push(`빈칸 채우기: 영어 문장에서 핵심 단어 1~2개를 ___ 로 표시. type:"fill", fill_sentence에 빈칸 문장, blank_answers에 정답 단어 배열`);
+    if (typeList.includes('order')) typeInstructions.push(`단어 배열: 영어 단어를 섞어서 제시. type:"order", scrambled에 무작위 배열된 단어 배열.
+  ⚠️ 어순 문제 필수 규칙:
+  - scrambled 배열은 반드시 english(정답 문장)의 단어들을 그대로 섞은 것이어야 함
+  - scrambled에 없는 단어는 정답에 포함 불가 / 정답에 없는 단어는 scrambled에 포함 불가
+  - 동사가 필요하면 실제 사용 형태(to enter, playing, sees 등)로 넣기 (동사 원형만 주면 안 됨)
+  - 예시 올바른 케이스: english="She likes picking flowers.", scrambled=["She","likes","picking","flowers."]
+  - 예시 잘못된 케이스: english="She likes pick.", scrambled=["She","likes","pick"] ← 문법 오류`);
+
+    const typeCountNote = typeList.length > 1
+        ? `문제 유형을 골고루 섞어주세요 (총 ${totalCount}개 중 각 유형 약 ${perType}개씩).`
+        : '';
+
+    const prompt = `당신은 한국 초중등 영어 교육 전문가입니다. 정밀하게 조정된 설정에 따라 영작 문제를 생성해주세요.
+
+━━━ 학년 및 난이도 ━━━
+학년: ${selectedGrade} (${info.name})
+난이도: ${DIFFICULTY_LABELS[diffValue]}
+가이드: ${diffGuide}
+
+━━━ 학습 자료 ━━━
+${materialSection}
+
+━━━ 문법 설정 ━━━
+${grammarSection}
+
+━━━ 주제 설정 ━━━
+${topicList.length > 0
+    ? `다음 단어를 모든 문장에 포함해 영작하세요: ${topicList.join(', ')}
+
+[단어 사용 필수 절차]
+STEP 1. 각 단어의 품사를 먼저 확인한다 (명사/동사/형용사/부사 등).
+STEP 2. 해당 품사에 맞는 문장 자리에만 배치한다.
+  - 명사 → 주어, 목적어, 보어, 전치사의 목적어 자리
+  - 동사 → 반드시 동사 자리 (주어 뒤), 시제/인칭 변화 적용
+  - 형용사 → 명사 수식 또는 보어 자리
+STEP 3. 문장을 만든 뒤 "이 단어가 올바른 품사 자리에 있는가?" 스스로 검토 후 출력.
+
+절대 금지: 어떤 단어든 품사를 무시하고 아무 자리에 끼워 넣는 것
+(예: 명사를 동사 자리에 → "I kitchen", "She schools", "He parks the ball" ← 이 맥락 없으면 오류)`
+    : '다양한 주제를 자유롭게 활용 (단조롭지 않게 섞어주세요)'}
+
+━━━ 힌트 설정 ━━━
+${hintGuide}
+
+━━━ 문제 유형 ━━━
+${typeInstructions.join('\n')}
+${typeCountNote}
+
+━━━ 규칙 ━━━
+1. 반드시 정확히 ${totalCount}개의 문제를 생성할 것. 절대 적게 생성 금지.
+2. 한국어 문장은 ${selectedGrade} 학생이 이해할 수 있는 자연스러운 표현
+3. 영어 정답은 문법적으로 완벽 (네이티브가 실제로 쓰는 자연스러운 문장)
+4. 단어 목록의 단어를 골고루 활용
+5. 선택된 문법 포인트를 다양하게 사용 (모든 문법을 쓸 필요 없음, 골고루 분배)
+6. 난이도 설정을 엄격하게 준수
+7. 문제가 흥미롭고 다양하게 구성
+8. [어순 문제 전용] scrambled 단어들만 순서대로 나열하면 정답(english)이 되어야 함. 동사 원형을 주고 싶다면 문장 구조를 그에 맞게 설계할 것
+
+━━━ 품사 규칙 (반드시 준수) ━━━
+• to부정사 뒤 → 동사 원형만 가능: want to [V], need to [V], like to [V]
+  ❌ "I want to kitchen" ❌ "She needs to school"
+  ✅ "I want to cook in the kitchen" ✅ "She needs to go to school"
+• 명사 주제어(kitchen, park, food 등)는 동사 자리에 절대 사용 불가
+• 관사(a/an/the) 뒤 → 반드시 명사(또는 형용사+명사)
+• 각 문장 생성 후 자체 검토: 주어(S)+동사(V) 구조가 완성됐는가 확인
+
+━━━ 응답 형식 ━━━
+반드시 JSON 배열만 응답 (다른 텍스트 절대 금지):
+[
+  {
+    "num": 1,
+    "type": "translate | fill | order",
+    "korean": "한국어 문장 (translate/fill/order 모두 필수)",
+    "english": "완전한 영어 정답 문장",
+    "hint": "힌트 또는 빈 문자열",
+    "fill_sentence": "I ___ an apple. (fill 타입일 때만, 나머지는 빈 문자열)",
+    "blank_answers": ["ate"] ,
+    "scrambled": ["apple","an","I","ate"] ,
+    "vocab_used": ["사용된단어"],
+    "grammar_point": "사용된 문법"
+  }
+]`;
+
+    try {
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                ...API_HEADERS_EXTRA,
+            },
+            body: JSON.stringify({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 4096,
+                system: `당신은 한국 초중등 영어 선생님입니다. 요청된 JSON 형식을 정확히 지켜서 응답하세요. JSON 배열 외 다른 텍스트는 절대 출력하지 마세요.
+
+[절대 규칙 - 문법 오류 방지]
+- 모든 english 문장은 반드시 네이티브 스피커가 실제로 쓰는 완벽한 영어 문장이어야 함
+- to부정사(want to, need to, like to 등) 뒤에는 반드시 동사 원형만 올 수 있음. 명사 절대 불가. 예: "I want to kitchen" → 오류, "I want to clean the kitchen" → 정상
+- 주어진 주제어가 명사(kitchen, school, park 등)이면 반드시 명사 자리(주어/목적어/보어)에만 배치
+- 각 문장을 생성한 뒤 스스로 품사를 검토하고, 오류가 있으면 즉시 수정 후 출력`,
+                messages: [{
+                    role: 'user',
+                    content: (isImage && currentImagesData.length > 0)
+                        ? [
+                            ...currentImagesData.map(img => ({ type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } })),
+                            { type: 'text', text: prompt }
+                          ]
+                        : prompt
+                }]
+            })
+        });
+
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.error?.message || `HTTP 오류 ${res.status}`);
+        }
+
+        const data = await res.json();
+        const raw = data.content[0].text;
+        const match = raw.match(/\[[\s\S]*\]/);
+        if (!match) throw new Error('JSON 파싱 실패. 응답:\n' + raw.substring(0, 300));
+
+        const problems = JSON.parse(match[0]);
+        if (!Array.isArray(problems) || !problems.length) throw new Error('문제를 생성하지 못했습니다.');
+
+        // 어순 문제: Claude가 만든 scrambled를 믿지 않고, english 문장을 직접 쪼개서 셔플
+        problems.forEach(p => {
+            if (p.type === 'order' && p.english) {
+                p.scrambled = shuffle(p.english.trim().split(/\s+/));
+            }
+        });
+
+        // 문법 검증: 명백히 틀린 문장 감지
+        const COMMON_NOUNS = new Set([
+            'kitchen','school','park','house','room','office','garden','hospital','library',
+            'store','market','restaurant','church','station','airport','beach','mountain',
+            'river','lake','forest','city','town','village','street','road','bridge',
+            'food','fruit','water','milk','bread','rice','cake','soup','meat','fish',
+            'dog','cat','bird','tree','flower','sun','moon','star','sky','rain','snow',
+            'book','pen','desk','chair','table','door','window','wall','floor','roof',
+            'car','bus','train','boat','plane','bike','ship','truck',
+            'family','friend','teacher','student','doctor','mother','father','brother','sister',
+            'morning','afternoon','evening','weekend','holiday','summer','winter','spring','autumn'
+        ]);
+        // to부정사를 유도하는 동사들 뒤에 오는 "to + 명사" 패턴만 감지 (전치사 to는 제외)
+        const INFINITIVE_VERBS = /\b(want|need|like|love|hate|hope|plan|decide|try|begin|start|prefer|wish|expect|forget|learn|refuse|tend|fail|manage|seem|appear|happen)\s+to\s+(\w+)/gi;
+        problems.forEach(p => {
+            if (!p.english) return;
+            INFINITIVE_VERBS.lastIndex = 0;
+            let m;
+            while ((m = INFINITIVE_VERBS.exec(p.english)) !== null) {
+                const wordAfterTo = m[2].toLowerCase().replace(/[^a-z]/g, '');
+                if (COMMON_NOUNS.has(wordAfterTo)) {
+                    p._grammarWarning = `"${m[1]} to ${m[2]}" — to부정사 뒤에 명사가 왔습니다 (동사 필요)`;
+                }
+            }
+        });
+        const badProblems = problems.filter(p => p._grammarWarning);
+        if (badProblems.length > 0) {
+            console.warn('[문법 경고] 아래 문제에 오류가 감지됐습니다:', badProblems.map(p => `#${p.num}: ${p.english} (${p._grammarWarning})`));
+        }
+
+        renderProblems(problems, info, diffValue);
+        if (isImage && currentImagesData.length > 0) {
+            const typeNames = typeList.map(t => ({'translate':'한→영','fill':'빈칸','order':'어순'}[t])).join('·');
+            document.getElementById('resultsSub').textContent =
+                `${info.name} · ${DIFFICULTY_LABELS[diffValue].split(' ')[0]} · ${typeNames} · 이미지 ${currentImagesData.length}장 분석`;
+        }
+    } catch (err) {
+        const isFetch = err.message === 'Failed to fetch';
+        document.getElementById('problemsList').innerHTML = `
+            <div class="error-box">
+                <strong>오류: ${escapeHtml(err.message)}</strong><br><br>
+                ${isFetch ? `
+                <b>네트워크 요청 자체가 차단됐습니다.</b><br>
+                • API 키 설정 여부 확인 (상단 ⚙️)<br>
+                • 인터넷 연결 확인<br>
+                • 이미지라면 더 작은 파일로 시도<br>
+                • 브라우저에서 파일을 열었다면 Chrome/Edge 권장
+                ` : `
+                • API 키가 올바른지 확인해주세요<br>
+                • 잠시 후 다시 시도해주세요
+                `}
+            </div>`;
+    } finally {
+        btn.disabled = false; btn.innerHTML = '✨ 문제 생성하기';
+    }
+}
+
+// ════════════════════════════════════════
+// RENDER
+// ════════════════════════════════════════
+function renderProblems(problems, info, diffValue) {
+    allAnswersShown = false;
+    document.getElementById('toggleAllBtn').textContent = '정답 모두 보기';
+    const typeNames = [...activeTypes].map(t => ({'translate':'한→영','fill':'빈칸','order':'어순'}[t])).join('·');
+    document.getElementById('resultsTitle').textContent = `${selectedGrade} 영작 문제 ${problems.length}개`;
+    document.getElementById('resultsSub').textContent =
+        `${info.name} · ${DIFFICULTY_LABELS[diffValue].split(' ')[0]} · ${typeNames} · AI 생성`;
+
+    const list = document.getElementById('problemsList');
+    list.innerHTML = '';
+
+    problems.forEach((p, i) => {
+        const card = document.createElement('div');
+        card.className = 'problem-card';
+
+        const typeMeta = { translate: '번역', fill: '빈칸', order: '어순' };
+        const typeBadgeClass = { translate: '', fill: 'fill', order: 'order' };
+        const typeLabel = typeMeta[p.type] || '번역';
+        const typeBadgeCls = typeBadgeClass[p.type] || '';
+
+        const vocabTags = Array.isArray(p.vocab_used) && p.vocab_used.length
+            ? p.vocab_used.map(v => `<span class="tag">${escapeHtml(v)}</span>`).join('') : '';
+        const grammarTag = p.grammar_point
+            ? `<span class="tag tag-grammar">${escapeHtml(p.grammar_point)}</span>` : '';
+        const tagsRow = (vocabTags || grammarTag)
+            ? `<div class="problem-tags">${vocabTags}${grammarTag}</div>` : '';
+
+        const hintRow = p.hint ? `<div class="problem-hint">💡 힌트: ${escapeHtml(p.hint)}</div>` : '';
+
+        // Type-specific body
+        let body = '';
+        if (p.type === 'fill') {
+            const fillSentence = (p.fill_sentence || p.english || '')
+                .replace(/___+/g, '<span class="blank">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span>');
+            body = `<div class="fill-sentence">${fillSentence}</div>`;
+        } else if (p.type === 'order') {
+            const words = Array.isArray(p.scrambled) ? p.scrambled : (p.english || '').split(' ');
+            body = `<div class="scrambled-words">${words.map(w => `<span class="scrambled-word">${escapeHtml(w)}</span>`).join('')}</div>`;
+        }
+
+        const warningRow = p._grammarWarning
+            ? `<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:8px 12px;font-size:0.8rem;color:#92400E;margin-top:8px;">⚠️ 문법 오류 감지: ${escapeHtml(p._grammarWarning)}</div>` : '';
+
+        card.innerHTML = `
+            <div class="problem-num">
+                문제 ${p.num || i + 1}
+                <span class="problem-type-badge ${typeBadgeCls}">${typeLabel}</span>
+                ${p._grammarWarning ? '<span style="color:#EF4444;font-size:0.75rem;font-weight:700;">⚠️ 오류</span>' : ''}
+            </div>
+            <div class="problem-korean">${escapeHtml(p.korean || '')}</div>
+            ${body}
+            ${hintRow}
+            ${tagsRow}
+            ${warningRow}
+            <div class="answer-area">
+                <button class="answer-toggle no-print" onclick="toggleAnswer(this)">정답 보기</button>
+                <div class="answer-box">
+                    <div class="answer-en">${escapeHtml(p.english || '')}</div>
+                    ${p.grammar_point ? `<div class="answer-grammar">📝 ${escapeHtml(p.grammar_point)}</div>` : ''}
+                </div>
+            </div>`;
+        list.appendChild(card);
+    });
+}
+
+function toggleAnswer(btn) {
+    const box = btn.nextElementSibling;
+    const vis = box.classList.toggle('visible');
+    btn.textContent = vis ? '정답 숨기기' : '정답 보기';
+}
+
+function printWithAnswers() {
+    document.body.classList.remove('print-no-answers');
+    window.print();
+}
+function printNoAnswers() {
+    document.body.classList.add('print-no-answers');
+    window.print();
+    document.body.classList.remove('print-no-answers');
+}
+
+function toggleAllAnswers() {
+    allAnswersShown = !allAnswersShown;
+    document.querySelectorAll('.answer-box').forEach(el => el.classList.toggle('visible', allAnswersShown));
+    document.querySelectorAll('.answer-toggle').forEach(btn => {
+        btn.textContent = allAnswersShown ? '정답 숨기기' : '정답 보기';
+    });
+    document.getElementById('toggleAllBtn').textContent = allAnswersShown ? '정답 모두 숨기기' : '정답 모두 보기';
+}
+
+function shuffle(arr) {
+    const a = [...arr];
+    for (let j = a.length - 1; j > 0; j--) {
+        const k = Math.floor(Math.random() * (j + 1));
+        [a[j], a[k]] = [a[k], a[j]];
+    }
+    return a;
+}
+
+function escapeHtml(str) {
+    return String(str || '')
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ════════════════════════════════════════
+// TUTORIAL
+// ════════════════════════════════════════
+const TUTORIAL_STEPS = [
+    {
+        target: '#apiSection',
+        title: '① API 키 설정',
+        text: '맨 처음 한 번만 하면 돼요!\n⚙️를 클릭해서 Claude API 키를 입력하고 저장하세요.\n키는 이 브라우저에만 저장되고 외부로 나가지 않아요.',
+        arrow: 'bottom'
+    },
+    {
+        target: '.card:nth-of-type(2)',
+        title: '② 학년 선택',
+        text: '문제를 풀 학생의 학년을 고르세요.\n학년에 맞는 단어 수준과 문법으로 문제가 만들어져요.',
+        arrow: 'bottom'
+    },
+    {
+        target: '.tabs',
+        title: '③ 단어/자료 입력',
+        text: '공부할 단어나 문장을 여기에 입력하세요.\n직접 타이핑하거나, 교재 PDF, 사진을 올려도 돼요!',
+        arrow: 'bottom'
+    },
+    {
+        target: '#problemCount',
+        title: '④ 문제 수·설정',
+        text: '문제 개수, 힌트 여부 등을 원하는 대로 골라주세요.',
+        arrow: 'top'
+    },
+    {
+        target: '#generateBtn',
+        title: '⑤ 문제 생성!',
+        text: '이 버튼을 누르면 AI가 문제를 만들어줘요.\n보통 10~20초 정도 걸려요.',
+        arrow: 'top'
+    },
+    {
+        target: null,
+        title: '완성! 🎉',
+        text: '문제가 생성되면 정답 보기/숨기기, 인쇄 기능을 쓸 수 있어요.\n"정답 없이 인쇄"를 누르면 학생용 시험지가 바로 나와요!',
+        arrow: null
+    }
+];
+
+let tutStep = 0;
+
+function startTutorial() {
+    tutStep = 0;
+    createTutorialOverlay();
+    showTutStep();
+}
+
+function createTutorialOverlay() {
+    if (document.getElementById('tutOverlay')) return;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'tutOverlay';
+    overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9000;
+        pointer-events:none;
+    `;
+    document.body.appendChild(overlay);
+
+    const bubble = document.createElement('div');
+    bubble.id = 'tutBubble';
+    bubble.style.cssText = `
+        position:fixed; z-index:9100; max-width:300px; width:calc(100vw - 40px);
+        background:white; border-radius:16px; padding:20px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.25);
+        font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;
+    `;
+    bubble.innerHTML = `
+        <div id="tutArrow" style="position:absolute; width:14px; height:14px; background:white; transform:rotate(45deg);"></div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <div id="tutTitle" style="font-size:0.95rem; font-weight:800; color:#1E293B; flex:1;"></div>
+            <button onclick="endTutorial()" style="background:none;border:none;cursor:pointer;color:#94A3B8;font-size:1.1rem;padding:0;line-height:1;">✕</button>
+        </div>
+        <div id="tutText" style="font-size:0.85rem; color:#475569; line-height:1.7; white-space:pre-line;"></div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px;">
+            <span id="tutProgress" style="font-size:0.75rem; color:#94A3B8; font-weight:600;"></span>
+            <div style="display:flex;gap:8px;">
+                <button id="tutPrevBtn" onclick="tutNav(-1)" style="padding:7px 14px; border:1.5px solid #E2E8F0; border-radius:8px; background:white; color:#475569; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit; display:none;">이전</button>
+                <button id="tutNextBtn" onclick="tutNav(1)" style="padding:7px 18px; border:none; border-radius:8px; background:#4F7FFF; color:white; font-size:0.82rem; font-weight:700; cursor:pointer; font-family:inherit;"></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(bubble);
+}
+
+function showTutStep() {
+    const step = TUTORIAL_STEPS[tutStep];
+    const bubble = document.getElementById('tutBubble');
+    const overlay = document.getElementById('tutOverlay');
+    if (!bubble || !overlay) return;
+
+    bubble.style.pointerEvents = 'all';
+
+    document.getElementById('tutTitle').textContent = step.title;
+    document.getElementById('tutText').textContent = step.text;
+    document.getElementById('tutProgress').textContent = `${tutStep + 1} / ${TUTORIAL_STEPS.length}`;
+    document.getElementById('tutNextBtn').textContent = tutStep === TUTORIAL_STEPS.length - 1 ? '시작하기 🚀' : '다음 →';
+    document.getElementById('tutPrevBtn').style.display = tutStep > 0 ? 'block' : 'none';
+
+    const arrow = document.getElementById('tutArrow');
+
+    if (step.target) {
+        const el = document.querySelector(step.target);
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => positionBubble(el, step.arrow), 350);
+        }
+    } else {
+        // 마지막 단계: 화면 중앙
+        arrow.style.display = 'none';
+        bubble.style.top = '50%';
+        bubble.style.left = '50%';
+        bubble.style.transform = 'translate(-50%, -50%)';
+    }
+}
+
+function positionBubble(el, arrowDir) {
+    const bubble = document.getElementById('tutBubble');
+    const arrow = document.getElementById('tutArrow');
+    const rect = el.getBoundingClientRect();
+    const bw = bubble.offsetWidth || 300;
+    const bh = bubble.offsetHeight || 160;
+    const margin = 14;
+    const arrowSize = 7;
+
+    bubble.style.transform = '';
+
+    let top, left;
+    arrow.style.display = 'block';
+
+    if (arrowDir === 'bottom') {
+        // 말풍선이 요소 아래에
+        top = rect.bottom + margin;
+        left = rect.left + rect.width / 2 - bw / 2;
+        arrow.style.top = `-${arrowSize}px`;
+        arrow.style.left = `${bw / 2 - arrowSize}px`;
+        arrow.style.bottom = '';
+    } else {
+        // 말풍선이 요소 위에
+        top = rect.top - bh - margin;
+        left = rect.left + rect.width / 2 - bw / 2;
+        arrow.style.bottom = `-${arrowSize}px`;
+        arrow.style.top = '';
+        arrow.style.left = `${bw / 2 - arrowSize}px`;
+    }
+
+    // 화면 밖으로 나가지 않게
+    left = Math.max(10, Math.min(left, window.innerWidth - bw - 10));
+    top = Math.max(10, Math.min(top, window.innerHeight - bh - 10));
+
+    bubble.style.top = top + 'px';
+    bubble.style.left = left + 'px';
+}
+
+function tutNav(dir) {
+    tutStep += dir;
+    if (tutStep >= TUTORIAL_STEPS.length) {
+        endTutorial();
+    } else {
+        showTutStep();
+    }
+}
+
+function endTutorial() {
+    document.getElementById('tutOverlay')?.remove();
+    document.getElementById('tutBubble')?.remove();
+}
+</script>
+</body>
+</html>
