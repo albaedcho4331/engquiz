@@ -354,8 +354,8 @@
 
 <div class="main">
 
-    <!-- API Key -->
-    <details class="api-details no-print" id="apiSection">
+    <!-- API Key (프록시 배포 후 숨김) -->
+    <details class="api-details no-print" id="apiSection" style="display:none">
         <summary>
             <span>⚙️</span> Claude API 키 설정
             <span id="apiStatus" style="margin-left:auto"></span>
@@ -584,9 +584,9 @@ eat"></textarea>
 pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-// 브라우저에서 Anthropic API 직접 호출 (anthropic-dangerous-direct-browser-access 헤더로 CORS 허용)
-const API_URL = 'https://api.anthropic.com/v1/messages';
-const API_HEADERS_EXTRA = { 'anthropic-dangerous-direct-browser-access': 'true' };
+// Cloudflare Pages Function 프록시를 통해 호출 (API 키는 서버에서 관리)
+const API_URL = '/v1/messages';
+const API_HEADERS_EXTRA = {};
 
 // ════════════════════════════════════════
 // DATA
@@ -940,7 +940,7 @@ function saveApiKey() {
     document.getElementById('apiStatus').innerHTML = '<span class="pill-ok">✓ 저장됨</span>';
     document.getElementById('apiSection').removeAttribute('open');
 }
-function getApiKey() { return localStorage.getItem('eq_claude_api_key') || ''; }
+function getApiKey() { return 'proxy'; }
 
 async function testApiKey() {
     const key = document.getElementById('apiKeyInput').value.trim() || getApiKey();
@@ -954,9 +954,7 @@ async function testApiKey() {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': key,
                 'anthropic-version': '2023-06-01',
-                ...API_HEADERS_EXTRA,
             },
             body: JSON.stringify({
                 model: 'claude-haiku-4-5-20251001',
@@ -1538,9 +1536,7 @@ ${typeCountNote}
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-api-key': apiKey,
                 'anthropic-version': '2023-06-01',
-                ...API_HEADERS_EXTRA,
             },
             body: JSON.stringify({
                 model: 'claude-sonnet-4-6',
